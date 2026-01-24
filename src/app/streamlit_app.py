@@ -1,3 +1,5 @@
+from src.retrieval.service import RetrievalService
+
 import json
 from pathlib import Path
 import streamlit as st
@@ -68,3 +70,28 @@ if chunks_file.exists():
             st.write(c["text"][:2000])
 else:
     st.info("No chunks found yet. Run the pipeline to generate chunks.")
+
+
+st.divider()
+st.subheader("Semantic Search (FAISS)")
+
+# Load retrieval service once
+@st.cache_resource
+def get_retriever():
+    return RetrievalService()
+
+if (Path("data/index/faiss.index").exists()) and (Path("data/index/meta.json").exists()):
+    retriever = get_retriever()
+
+    q = st.text_input("Ask a question (semantic search)", "")
+    top_k = st.slider("Top K", 1, 10, 5)
+
+    if q.strip():
+        with st.spinner("Searching..."):
+            results = retriever.search(q, top_k=top_k)
+
+        for r in results:
+            with st.expander(f"{r.chunk_id}  score={r.score:.4f}  source={r.source}"):
+                st.write(r.text)
+else:
+    st.info("No FAISS index found. Run: PYTHONPATH=. python src/retrieval/build_index.py")
