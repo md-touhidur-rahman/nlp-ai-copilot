@@ -1,0 +1,529 @@
+--- PAGE 1 ---
+ScienceDirect
+Available online at www.sciencedirect.com
+www.elsevier.com/locate/procedia 
+Procedia CIRP 91 (2020) 522–527
+2212-8271 © 2020 The Authors. Published by Elsevier B.V.
+This is an open access article under the CC BY-NC-ND license ( http://creativecommons.org/licenses/by-nc-nd/4.0/)
+Peer-review under responsibility of the scientific committee of the CIRP Design Conference 2020 
+10.1016/j.procir.2020.02.209
+© 2020 The Authors. Published by Elsevier B.V . 
+This is an open access article under the CC BY-NC-ND license (http://creativecommons.org/licenses/by-nc-nd/4.0/)
+Peer-review under responsibility of the scientific committee of the CIRP Design Conference 2020
+Keywords: Additive Manufacturing Simulation; Layered Tetrahedral Meshing; Laser Powder Bed Fusion;
+1. Introduction
+Additive Manufacturing (AM) has become increasingly 
+popular in recent years. Especially for metal parts with powder 
+bed fusion processes. This is reflected by more than a 40% 
+increase in the sales volume of metal powder produced for the 
+additive manufacturing industry [1]. The benefits of AM ,
+opposed to traditional manufacturing technologies, are in the 
+possibility to create parts with a high level of complexity quite 
+easy, without the need for casting moulds or tooling. Despite 
+the possible highly complex shapes, one has to deal with 
+manifold and complex physical effects during the additive 
+manufacturing process. This leads to the problem that not yet 
+every single effect is well understood [2, 3]. One of the effects 
+difficult to predict is the thermally induced residual stresses and 
+therefrom resulting deformations [4]. These residual stresses 
+lead to large distortions of the part during production and the 
+need for several attempts in support structure des ign before a 
+part can be printed without failure. As this is highly time 
+consuming and also expensive, simulations are used to predict 
+the deformations during the print. With those simulation results 
+the part or the support structure can be adapted in orde r to be 
+printed without failure at the first attempt. Because of the large 
+number of machine parameters, physical effects that are present 
+in an additive manufacturing process and limited 
+computational resources, it is necessary to restrict the simulated
+effects. It is important to compare the results to corresponding 
+experiments [5]. For fast computation and accurate results ,
+correct meshing is very important. 
+The aim of this paper is to provide a tool for the selection of 
+a suitable meshing strategy, which is capable of generating 
+accurate results with minimal computational effort. Therefore 
+this article points out the differences between the, for additive 
+manufacturing simulations , newly introduced layered 
+tetrahedral and the traditional Cartesian meshing strategy. An 
+artificial test sample is designed to have a complex to mesh 
+geometry and is then simulated with different mesh types and 
+element sizes until con vergence is reached. The simulation 
+models are then compared with each other regarding 
+computation time, element quality and result accuracy as well 
+30th CIRP Design 2020 (CIRP Design 2020)
+A Comparison of Layered Tetrahedral and
+Cartesian meshing in Additive Manufacturing Simulation
+Sebastian Webera,b,*, Joaquin Monteroa,b, Matthias Bleckmannb, Kristin Paetzolda
+aUniversity of the Bundeswehr Munich, Werner-Heisenberg-Weg 39, Neubiberg 85579, Germany
+bResearch Institute for Materials, Fuels and Lubricants of the German Federal Armed Forces, Institutsweg 1, Erding 85435, Germany
+* Corresponding author. Tel.: +49-89-6004-3685 ; E-mail address: s.weber@unibw.de
+Abstract
+In additive manufacturing simulation most of the time the overall aim is to compensate residual stress induced deformations o f
+a printed part. For this goal a high result accuracy is needed. In order to achieve this, simulation engineers have to take numer ous 
+decisions. This article provides assistance in the determination of a reasonable meshing type using a complex to mesh test sample 
+that is close to the real geometry of round metallic fatiguetest samples. The traditional Cartesian meshing strategy withand without 
+the use of a projection factor is compared with layered tetrahedral meshing, which is newly introduced to additive manufacturing 
+simulation. Additionally the displacement results are set side by side with a scan of an additive manufactured part. The study shows 
+that layered tetrahedral meshing can achieve more accurate results with coarser mesh sizes, especially in regions of high curvature.
+This is a resupply of March 2023 as the template used in the publication of the original article contained errors. The content of the article has remained unaffected.
+
+--- PAGE 2 ---
+Sebastian Weber  et al. / Procedia CIRP 91 (2020) 522–527 523
+as a structural error energy . Finally the results of the layered 
+tetrahedral mesh are compared with a 3D sc an of an actual 
+printed part.
+2. State of the Art
+2.1. Laser Powder Bed Fusion
+Laser Powder Bed Fusion (L- PBF) commonly referred as
+Selective Laser Melting (SLM) or Direct Metal Laser Sintering 
+(DMLS) is a layered manufacturing process in the field of AM.
+It is one of the most commercialized metal AM processes. As 
+opposed to subtractive manufacturing methods, metal powder 
+is molten, under the use of a laser beam, successively layer 
+upon layer to generate the part [ 6]. The process starts with a 
+thin layer of powder on the build plate. After melting a layer, 
+the build plate is lowered by a specific amount, specifying the 
+layer height, and new powder is placed on top by a recoating 
+device. The scanning path of the laser is controlled by a file 
+containing vecto rs for each layer. This file is generated 
+beforehand by slicing a 3D model, which is usually created 
+with a Computer Aided Design (CAD) system. In order to 
+extinguish the effect of oxidation in the build chamber, 
+remaining oxygen is evacuated by flooding t he chamber with
+inert gas. Typically the layer height ranges from 20 to 50 µm. 
+A schematic of the process is shown in Fig. 1.
+Fig. 1. Schematic of the L-PBF process.
+2.2. Additive Manufacturing Simulation
+The Finite -Element-Method (FEM) has become the most 
+popular mesh- based numerical method for the calculation of 
+structural and thermal models and therefore also for physical 
+phenomena as residual stresses and distortions during the AM 
+process. The main idea behind the FEM is that a complex 
+geometry can be discretized in a finite number of much simpler 
+objects, the elements. Those elements form a mesh 
+representing the actual geometry reduced to a finite number of 
+unknowns. The finite number of unknowns leads to a finite 
+number of equations to be solved, either in an explicit or 
+implicit way. Explicit methods can run into numerical 
+instability, if the time step is too large. However implicit 
+solutions might fail to converge for heavily non -linear 
+calculations [7].
+Simulations of the additive manufacturing process are split 
+into two separate systems. A thermal and a mechanical 
+simulation. These simulations can run simultaneously as 
+coupled calculation or in sequence as uncoupled calculations. 
+Coupled simulations are more accurate, but at the same time 
+more computational expensive. As input for both systems 
+material properties, the parts geometry, which later has to be 
+meshed, as well as initial and boundary conditions have to be 
+specified. During the solution pro cess the temperature field at 
+each layer is calculated. To reduce computational cost, the heat 
+for the phase change of the powder can be applied at once for 
+each layer [ 8]. In this way there is no need for a detailed 
+simulation of the scanning vectors. Based on the thermal 
+results, the displacements of the mechanical model are 
+evaluated. In order to calculate the model with an increasing 
+number of layers, the elements of each layer are suppressedand 
+then reactivated at the right time using the element birth and 
+death approach. Due to the transient analysis in layers, the mesh 
+also needs to be in form of layers. At the moment there are two 
+different meshing options, which will be described in the next 
+sections of this article.
+2.3. Cartesian meshing
+Cartesian or voxel meshing is the most commonly used 
+mesh type for current additive manufacturing simulations [ 9].
+The mesh consists of cubes (voxels) with a, for the whole 
+model consistent, specified size. This leads to a layered mesh, 
+which is necessary to mimic the part generation in layers like 
+in powder bed fusion processes using element birth and death .
+Due to the voxel elements with identical edge length on each 
+side of the cube, the representation of the geometry is only an 
+approximation. Depending on the si ze of the elements, tiny 
+features are either not expressed in detail, leading to an 
+inaccurate simulation, or the computational cost of the 
+simulation model highly increases. In order to cope with the 
+inaccurate representation of the geometry using hexahedron 
+elements, ANSYS
+® uses a so called projection factor. This 
+factor ranges from zero to one and describes the level of 
+representation with zero as no adaption of the elements. With 
+an increasing value of the factor, the elements get more and 
+more distorte d to fit the actual geometry of the part. The 
+resulting skewness and uneven aspect ratio leads to a worse 
+element quality. Nevertheless more accurate simulation results 
+are possible using this meshing method. Cartesian meshes can 
+use linear, quadratic or even higher polynomial approaches. 
+The hexahedron shaped elements then have eight (linear) or 
+twenty (quadratic) nodes per element.
+2.4. Layered tetrahedral meshing
+Layered tetrahedral meshing was first introduced for 
+additive manufacturing simulation in 2019 by ANSYS
+®. Its 
+aim is to simplify the representation of the small detailed 
+geometry of AM parts without increasing the level of 
+complexity of the model [10]. The tetrahedral shape of the 
+elements allows the meshing algorithm to achieve a better 
+fitting mesh with only small element distortions. Despite the 
+higher number of elements in the simulation model using this 
+meshing method, accurate results can be achieved in less time 
+than with Cartesian meshes [9]. Layered tetrahedral meshing 
+differs from traditional tetrahedral meshing in terms of element 
+orientation. Within the meshing parameters, the layer height is 
+defined, at which all elements need to form a flat surface. The 
+This is a resupply of March 2023 as the template used in the publication of the original article contained errors. The content of the article has remained unaffected.
+
+--- PAGE 3 ---
+524 Sebastian Weber  et al. / Procedia CIRP 91 (2020) 522–527
+layer height can, but does not have to, be equal withthe element 
+size, as elements are allowed to be smaller. The mesh is 
+generated from one part surface on with evenly thick slices 
+consisting of tetrahedrons for element birth and death.
+The tetrahedron shaped elements of a layered tetrahedral 
+mesh commonly have five (linear approach) or ten (quadratic 
+approach) nodes per element. As there are less nodes per 
+element than with the hexahedron shaped ones, more elements 
+are required to reach the same result accuracy.
+3. Implementation
+3.1. Selection of the test geometry
+The geometry selected for this simulations is almost 
+identical with metal fatigue test samples described in ASTM 
+E466-15 [11] and similar to round metallic tensile test samples
+described in the standard ASTM E8 -04 [12]. It is defined by a 
+diameter of 10 mm at the top and the bottom of the rod, 
+reaching 15 mm into the part. The middle section is, opposed 
+to regular tensile test samples designed using a constant radius 
+of 46.25 mm, leaving a diameter of 5 mm at the smallest cross-
+section. The total height of the rod is 60 mm.
+This design was selected , because of its close similarity to
+tensile test samples and the rather small height for shorter 
+simulation time. Also the constant radius of the middle section 
+from side view is better for this experiment, because it is more 
+complex to mesh. For the same reason acylindrical test sample 
+was preferred over rectangular shapes.
+3.2. Modelling & Simulation
+The previously described test geometry is placed directly on 
+a round plate with 100 mm diameter and 20 mm thickness, 
+representing the build plate. Furthermore it is oriented in an 
+upright position on the plate without the use of any support. As 
+material for the build plate and the part the ANSYS
+® additive 
+material library titanium alloy Ti-6Al-4V is used with 
+temperature dependent properties for density, specific heat ,
+thermal conductivity and isotropic elasticity as well as bilinear 
+isotropic hardening. The melting temperature of th e titanium 
+alloy is set to 1605 °C. In the next step twelve variants are 
+created. For each meshing type available (Cartesian, Cartesian
+with projection factor and layered tetrahedral) variants with a 
+specified element size of 1 mm, 0.75 mm, 0.5 mm and 
+0.25 mm are created. Further in this work the mesh size of 
+0.25 mm is not considered for the results as the computational 
+cost with computatio n times of more than 96 hours exceeded 
+the available ressources. For layered tetrahedral meshing the 
+layer thickness is set to be equivalent to the element size 
+resulting in one element in z-direction per layer. The projection 
+factor for the Cartesian mesh with use of the projection factor 
+is set to 0.5 of 1 as a maximum. All other parameters in the 
+meshing options are left on their default value. The differences
+between the mesh types and how accurate the geometry can be
+represented is shown with a 1 mm element size in figure 2. The 
+elements themselve follow a quadratic approach and have 
+therefore 10 nodes for tetrahedrons and 20 nodes for 
+hexahedrons. The mesh for the base plate is a hexahedron 
+dominant mesh with an element  size of 10 mm as it is not of a 
+high importance for this calcualtion.
+In the AM process settings , all variables for the virtual 
+additive manufacturing are set. As manufacturing process ,
+powder bed fusion is selected. Furthermore the layer height is 
+set to 20 µm, hatch spacing to 80 µm and scanning speed to 
+600 mm/s. The time between layers is set to be 12 seconds. As 
+the simulation is only for a single part on the build plate, no 
+part multiplier is defined and the number of heat sources is set 
+to one. Additional parameters are group ed in those for during 
+the build and some for the cool down phase. In these two 
+groups only the preheat temperature and room temperature are 
+set with an equal value of 24 °C. All other parameters for 
+additive manufacturing such as the powder and gas convection 
+coefficients are left on their default value.
+This simulation is constructed as uncoupled calculations 
+like it is described in section 2.2 of this article. This means a 
+transient thermal analysis is followed by a static structural 
+analysis. For the t hermal analysis two load steps are created. 
+One for the build phase and one for cool down. For each step
+one temperature boundary condition with 24 °C is set on the 
+lower surface of the build plate.For the structural analysis there 
+are as well two load st eps for build and cool down. The 
+boundary condition for both of them defines the fixation of all 
+degrees of freedom for the lower surface of the build plate. The 
+connection between the build plate and the part to be printed is 
+realized using a bonded contact. Because of the non -linear 
+material behaviour both simulations run as non -linear 
+calculations. All results are computed on a workstation with 
+64 GB of RAM, Intel
+® Core™ i7 CPU with up to 4.3 GHz and 
+a Nvidia® GeForce® GTX 1080 Ti for forced GPU acceleration.
+3.3. Fabrication of the test sample
+In the pre-processing, the part shown in figure 3 was placed in 
+the centre of the build plate without the use of any support and
+Fig. 2. Mesh types with size 1 mm: Cartesian (a), Cartesian with 
+projection factor (b) and layered tetrahedral (c) mesh.
+This is a resupply of March 2023 as the template used in the publication of the original article contained errors. The content of the article has remained unaffected.
+
+--- PAGE 4 ---
+Sebastian Weber  et al. / Procedia CIRP 91 (2020) 522–527 525
+was then sliced into 3,000 consecutive layers using the machine 
+manufacturers build processor . No support structure was used 
+to eliminate the effect of it on residual stresses and limit the 
+results to the actual part. The selected layer height was 20 µm
+because of good experiences from previous prints. The test 
+sample was fabricated according to the parameters of the 
+simulation on a Trumpf TruPrint 1000 Multilaser selective 
+laser melting machine using a single laser . The used material 
+was TiAl6V4 (Grade 23) powder obtained from SLM
+®
+Solutions with a particle size of 20 – 63 µm. Because of the 
+small proportion of larger sized partic les it is conditionally 
+applicable for a layer height of 20 µm, but still delivers good 
+results and was used due to availability . As in the simulation 
+only the melting temperature is specified , the laser power that 
+matches this melting temperature had to be estimated based on 
+the energy input using empirical values from previous prints. 
+The selected power was 83 W for a scanning speed of 
+600 mm/s. The time between layers was set to 12 seconds to 
+match the simulation. Another parameter that has to be set on 
+the L-PBF machine and which is not present in simulations is 
+the air speed of the inert gas. In this case it was set to 2.5 m/s, 
+resulting in an inert gas flow of 4.4 l/min. In order to assure a 
+non-oxidizing build environment, the maximum level of 
+residual oxygen in the build chamber was allowed to be 0.01%. 
+At the beginning of the print the temperature in side the build 
+chamber was 24.5 °C with a relative humidity of 40%.
+4. Results & Analysis 
+4.1. Differences in the mesh types
+The simulation results for the structural error energy 
+(SERR) and the displacement in z-direction are shown in figure 
+4 and 5. These results are only two of the result values and 
+model properties that were used to compare the three mesh 
+types. An overview of the values for each mesh type and mesh 
+size is listed in Table 1. Starting with the number of nodes it 
+can be seen that for each mesh size the layered tetrahedron 
+mesh has up to almost double as much nodes as the Cartesian 
+meshes. For the number of elem ents, this difference is even 
+bigger. This leads to a higher number of total degrees of 
+freedom in the model and therefore to more equations to be 
+solved. With more equations the computational cost and the 
+calculation time increases. The shortest time (~8h ) for a mesh 
+size of 0.5 mm was reached by the Cartesian mesh with the 
+projection factor. Often the aspect ratio, skewness and 
+minimum edge angle of the elements are reason for failed 
+simulations because of elements turning inside out or equations 
+that fail to converge. Therefore the element quality is a 
+significant property to look at. Mesh statistics show, as 
+Fig. 3. TiAl6V4 test sample produced using the L-PBF process.
+Table 1. Comparison of result values for different mesh types with best results marked in bold.
+Cartesian Cartesian with projection Layered tetrahedral
+Mesh size (mm) 1 0.75 0.5 1 0.75 0.5 1 0.75 0.5
+Number of nodes 31,244 45,419 208,855 30,132 44,291 204,651 42,260 81,646 294,015
+Number of elements 6484 9588 47,124 6,222 9,324 46,107 27,515 53,102 207,857
+Average quality 0.971 0.994 0.967 0.907 0.950 0.936 0.799 0.716 0.818
+Computation time (s) 1,170 2,668 30,722 1,094 2,377 29,214 1,550 3,481 38,288
+Average Structural error; SERR (mJ) 41.872 18.843 2.106 37.622 16.194 1.792 6.162 2.664 0.302
+Characteristic element length (mm) 0.839 0.741 0.404 0.713 0.671 0.380 0.839 0.631 0.442
+Fig. 4. Structural error energy in mJ on a logarithmic scale for 
+Cartesian (a), Cartesian with projection factor (b) and layered 
+tetrahedral (c) meshing with size 0.5 mm.
+This is a resupply of March 2023 as the template used in the publication of the original article contained errors. The content of the article has remained unaffected.
+
+--- PAGE 5 ---
+526 Sebastian Weber  et al. / Procedia CIRP 91 (2020) 522–527
+expected, the best value of the average element quality for the 
+Cartesian mesh with 99.4%. Even the elements with distortion 
+induced by the projection factor have still an average quality 
+above 90%. This is also reflected by the low minimum element 
+quality of the tetrahedral mesh with approximately 20%.
+As the previous mentioned values a nd properties only give 
+an overview on the simulation process itself, the results of 
+figure 4 and 5 are used to compare the mesh types for result 
+accuracy. In both colour plots can be seen that the inconsistent 
+colour variations, especially for the Cartesi an mesh, are 
+dependent on geometry representation accuracy. The fast and 
+inhomogeneous colour transitions are an indicator for 
+inaccurate results. This can also be seen in figure 4 as it shows 
+the estimated structural error energy (SERR) on a logarithmic 
+scale with up to the order of two higher results for the Cartesian 
+mesh. In fact the arithmetic mean value over all elements in the 
+model is 0.3 mJ for the layered tetrahedral mesh compared to 
+2.1 mJ for the Cartesian. This difference in result accuracy is 
+not changing with even smaller elements as all models reached 
+result convergence. The layered tetrahedron mesh converged 
+even already with a mesh size of 0.75 mm. As criteria for a 
+converged model the gradient of the estimated error has to be 
+of an order c lose to the squared characteristic element length
+following the example of [13] for displacement errors.
+4.2. Comparison of the simulation and the print
+The printed test sample was scanned using a Creaform 
+Handyscan 700™ with an accuracy of up to 0.03 mm.
+Measurements on the scanned surface in z- direction showed a 
+mean shrinkage at the centre point of the top surface of 
+0.36 mm. Compared to the results displayed in figure 5 the 
+displacement in z -direction of the scanned part is in the same 
+order but three times as high. Figure 6 views the geometric 
+deviations between the deformed geometry from figure 5 (c) 
+and the scanned part as colour plot. Both polygon models are 
+pre-aligned using a best-fit algorithm. After the pre -alignment 
+the correct starting point in z- direction is assured by adding a 
+plane through the bottom surface and shifting the scan along 
+the z-axis until it is coincident with the simulation base plate .
+The top surface of the actual sample is around 0.2 mm lower 
+than the one from the simulation and is therefore coloured blue 
+with a negative sign. It is worth noticing that the lower part of 
+the radius is almost coincident in the scan and the simulation, 
+whereas the upper part shows an increasing deviation starting 
+from the centre point . The red col or indicates a positive 
+deviation from the simulation geometry, which means the 
+diameter of the sample is larger than the simulation. This is 
+consistent with a total shrinkage of the sample in z -direction.
+Deviations on the cylindrical parts of the test sample should be 
+neglected as they are not constant in x - and y- direction and 
+hence afflicted with inaccuracy in alignment of both z-axis.
+4.3. Result discussion
+The result accuracy shows a s trong dependency on the 
+geometry representation, especially seen in figure 4, at each 
+point of the mesh. In other words, Cartesian meshing is still 
+reasonable for models with less curvature. Nevertheless the 
+tetrahedral mesh can be coarser and showed, other than the 
+Cartesian meshes, also with 0.75 mm element size , accurate
+results. For almost the same accuracy the 0.75 mm tetrahedral 
+mesh needed only 3,481s . The achieved time saving s due to 
+reduced computational cost are in the order of ten. The layered 
+tetrahedral mesh shows a more geometrical accurate and 
+therefore more realistic representation.
+Beside the differences between the presented types of 
+meshing, also the comparison to a real part is analysed .
+Measurements showed a qualitative agreement of the 
+simulation with the printed sample. However quantitative
+Fig. 5. Displacement in z-direction in mm for Cartesian (a), Cartesian 
+with projection factor (b) and layered tetrahedral (c) meshing with a 
+size of 0.5 mm.
+Fig. 6. Geometric deviation between the deformed tetrahedral mesh 
+with 0.5 mm size and a scan of the test sample created using L-PBF
+This is a resupply of March 2023 as the template used in the publication of the original article contained errors. The content of the article has remained unaffected.
+
+--- PAGE 6 ---
+Sebastian Weber  et al. / Procedia CIRP 91 (2020) 522–527 527
+differences between simulation and scan could be observed.
+Reasons for this deviation are most likely in the settings of the 
+simulation. One of the biggest assumptions that is made is the 
+energy input, as the melting temperature of the material is used 
+instead of the laser power of the actual print. Another 
+simplification is that heat is applied layer by layer and not 
+elementwise following a hatch pattern. Also to reduce 
+computational cost, the surrounding powder was not included 
+as a mesh in these simulations. Available parameters to adjust
+the simulation are limited and for example the gas flow or the 
+inconsistency of the build chamber temperature are not 
+considered. On top of that , thermal properties such as 
+convection coefficients, thermal conductivity or temperature 
+dependent elasticity are often not available for the specific 
+powder used for the L-PBF process. Hence materials from th e
+software’s standard library are used. Additional to the 
+simplifications of the simulation , the used powder for this test 
+sample was not optimal , because of its partial large grain size
+paired with the selected layer height. Larger particles are taken 
+away by the recoating device, resulting in a lower density.
+Nevertheless the powder was used due to the reason of 
+availability. 
+5. Conclusion
+Traditional types as the Cartesian mesh with and without a 
+projection factor and new approaches like the layered 
+tetrahedral mesh were faced. The results show, that for the 
+same mesh size, the layered tetrahedral mesh delivers a 
+smoother result that fits the actual geometry of the part better
+especially in regions of high curvature. This does not 
+necessarily lead to more accurate result s as the point where 
+stresses and displacements are evaluated is also important.
+In general it is difficult to assure which mesh type suits 
+generic cases the best, because of the dependency on the 
+geometry. Also there are rather large deviations between the 
+actual printed part and the simulations whilst the differences in 
+displacements for all mesh types are quite small . Nevertheless 
+it is shown that the best result convergence together with the 
+smallest structural error energy is reached by the layered 
+tetrahedral mesh even though the best element quality is 
+achieved by the Cartesian mesh. It has to be pointed out that 
+the overall results show deviations from each other using 
+different meshing strategies for the same element size. 
+Compared to the resolution of the 3D scanner those oscillations 
+are way smaller and therefore not applicable for determination 
+of the best mesh type. For the minim um displacement in z -
+direction the variations between the evaluated meshing types 
+are even smaller than the surface roughness of the top surface.
+This means that the results of all three meshing strategies will 
+show the same deviations if they are compared to the 3D scan.
+In future works the results of this paper could be extended 
+by the evaluation of simulated residual stresses and their 
+validation using techniques such as neutron diffractometry.
+Also the applicability to other geometries with less curvature 
+or more residual stress induced deformations can be evaluated. 
+As the overall aim often is the compensation of these 
+deformations with a pre -distorted model the benefits of the 
+closer geometrical representation of layered tetrahedral meshes 
+could be a topic for further investigations.
+Using the same element size, the layered tetrahedral mesh 
+has shown to be relatively computational expensive compared 
+to the other two meshing strategies. However, if a small mesh 
+size is not relevant, layered tetrahedral meshes can deliver 
+results faster due to the result convergence with coarser 
+meshes. Another benef it is a better more accurate 
+representation of the parts deformations especially for complex 
+geometries. For thin features and places with hypothetically 
+high stress intensity factors, a layered tetrahedral mesh works 
+best in order to minimize the possible discretization induced 
+error.
+Acknowledgements
+The authors like to thank Christoph Petroll of the 3D 
+Printing Center at the Research Institute for Materials, Fuels 
+and Lubricants of the German Federal Armed Forces for his 
+assistance with the L-PBF print of the test sample.
+References
+[1] Wohlers, T., 2019. Wohlers report 2019: 3D printing and additive 
+manufacturing state of the industry.
+[2] Bauereiß, A., Scharowsky, T. and Körner, C., 2014. Defect generation 
+and propagation mechanism during additive manufacturing by selective 
+beam melting, J Mater Process Tech 2014, pp. 2522–2528. 
+[3] Meier, C., Penny, R.W., Zou, Y., Gibbs, J.S., Hart, A.J., 2017. 
+Thermophysical Phenomena in Metal Additive Manufacturing by 
+Selective Laser Melting: Fundamentals, Modeling, Simulation and 
+Experimentation, Annual Review of Heat Transfer.
+[4] Leuders, S., Thöne, M., Riemer, A., Niendorf, T., Tröster, T., Richard,
+H.A., Maier, H.J., 2013. On the mechanical behaviour of titanium alloy 
+TiAl6V4 manufactured by selective laser melting: Fatigue resistance and 
+crack growth performance, International Journal of Fatigue, Volume 48,
+pp. 300-307.
+[5] Krol, T.A., Seidel, C., Schilp, J., Hofmann, M., Gan, W., Zaeh, M.F., 
+2013. Verification of Structural Simulation Results of Metal-based 
+Additive Manufacturing by Means of Neutron Diffraction, Physics 
+Procedia 41, pp. 849–857.
+[6] ISO/ASTM 52900:2015. Additive manufacturing – General principles -
+Terminology
+[7] Harewood, F.J., McHugh, P.E., 2007. Comparison of the implicit and 
+explicit finite element methods using crystal plasticity, Computational 
+Materials Science 39, pp. 481–494.
+[8] Neugebauer F, Keller N, Hongxiao X, et al., 2014. Simulation of 
+selective laser melting process using specific layer based meshing,
+Fraunhofer direct digital manufacturing conference.
+[9] Conover, D.L., Dalne, S., Pawlak, T.P., 2019. Layered Tetrahedral 
+Modeling of the L-PBF Process, Sim-AM 2019.
+[10] ANSYS 2019 R1 Delivers Workflow Improvements for Pervasive 
+Engineering Simulation, https://www.ansys.com/en/blog/ansys-2019-r1-
+workflow-improvements-pervasive-engineering-simulation (10.05.19)
+[11] ASTM E466-15, Standard Practice for Conducting Force Controlled 
+Constant Amplitude Axial Fatigue Tests of Metallic Materials, ASTM 
+International, West Conshohocken, PA, 2015, www.astm.org
+[12] ASTM E8-04, Standard Test Methods for Tension Testing of Metallic 
+Materials, ASTM International, West Conshohocken, PA, 2004,
+www.astm.org
+[13] Merino, P., Tröltzsch, F. and Vexler, B., 2010. Error Estimates for the 
+Finite Element Approximation of a Semilinear Elliptic Control Problem 
+with State Constraints and Finite Dimensional Control Space, ESAIM: 
+Mathematical Modelling and Numerical Analysis 44, pp. 167-188.
+This is a resupply of March 2023 as the template used in the publication of the original article contained errors. The content of the article has remained unaffected.
