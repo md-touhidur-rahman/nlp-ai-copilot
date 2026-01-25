@@ -6,6 +6,8 @@ import streamlit as st
 from src.ingestion.pipeline import run_pipeline
 from src.retrieval.service import RetrievalService
 from src.agent.rag_answerer import RAGAnswerer
+import os, sys
+sys.path.append(os.path.abspath("."))
 
 # Data modules (Phase 3)
 from src.data.loader import load_table

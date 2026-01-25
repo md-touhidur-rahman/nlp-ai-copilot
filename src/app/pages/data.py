@@ -1,245 +1,218 @@
 # src/app/pages/data.py
-import streamlit as st
-from pathlib import Path
+from __future__ import annotations
 
+import os
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
+import pandas as pd
+import streamlit as st
+
+from src.agent import tools
+from src.app.workspace import ws
 from src.data.loader import load_table
 from src.data.schema import detect_schema
-from src.data.filtering import filter_sales
-from src.data.aggregate import (
-    group_sum_by_date,
-    group_sum,
-    group_sum_by_month,
-    group_sum_by_year,
-)
-from src.data.nl_parser import parse_data_query
-
 
 st.set_page_config(page_title="Data Explorer", layout="wide")
-st.title("📊 Data Explorer")
+st.title("Data Explorer")
+st.caption("Explore default datasets and uploaded CSVs (shared from Chat).")
 
-DATA_DIR = Path("data/datasets/tabular")
-csvs = sorted(DATA_DIR.glob("*.csv"))
+DEFAULT_DIR = Path("data/datasets/tabular")
 
-if not csvs:
-    st.warning("No CSV files found in data/datasets/tabular/")
+
+def _load_default_csv(path: Path) -> pd.DataFrame:
+    df = load_table(str(path))
+    if df is None:
+        raise ValueError(f"Failed to load: {path}")
+    return df
+
+
+def _guess_date_col(df: pd.DataFrame) -> Optional[str]:
+    # already datetime?
+    for c in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[c]):
+            return c
+    # try parseable
+    for c in df.columns:
+        s = df[c].dropna().astype(str).head(50)
+        if s.empty:
+            continue
+        parsed = pd.to_datetime(s, errors="coerce")
+        if parsed.notna().mean() >= 0.8:
+            return c
+    return None
+
+
+def _guess_numeric_col(df: pd.DataFrame) -> Optional[str]:
+    for c in df.columns:
+        if pd.api.types.is_numeric_dtype(df[c]):
+            return c
+    return None
+
+
+def _guess_group_col(df: pd.DataFrame) -> Optional[str]:
+    for c in df.columns:
+        if pd.api.types.is_object_dtype(df[c]):
+            n = df[c].nunique(dropna=True)
+            if 2 <= n <= 50:
+                return c
+    return None
+
+
+w = ws()
+
+# Build dataset menu: defaults + uploads
+default_csvs = sorted(DEFAULT_DIR.glob("*.csv"))
+uploaded = w.get("datasets", {}) or {}
+
+options: list[Tuple[str, str]] = []  # (kind, name)
+for p in default_csvs:
+    options.append(("default", p.name))
+for name in uploaded.keys():
+    options.append(("uploaded", name))
+
+if not options:
+    st.warning("No datasets found. Upload a CSV from the Chat page.")
     st.stop()
 
-# ----------------------------
-# Dataset selection
-# ----------------------------
-csv_file = st.selectbox("Select a dataset", csvs, format_func=lambda p: p.name)
+# Select active dataset with a stable default
+active_name = w.get("active_dataset")
+default_index = 0
+if active_name:
+    for i, (_, nm) in enumerate(options):
+        if nm == active_name:
+            default_index = i
+            break
 
-df = load_table(csv_file)
+kind, name = st.selectbox(
+    "Select a dataset",
+    options=options,
+    index=default_index,
+    format_func=lambda x: ("Uploaded: " if x[0] == "uploaded" else "Default: ") + x[1],
+    key="data_dataset_select",
+)
 
-st.subheader("Dataset Preview")
-st.dataframe(df.head(100))
+# Load df
+df: pd.DataFrame
+dataset_label: str
 
-# ----------------------------
-# Schema inspection
-# ----------------------------
-st.subheader("Detected Schema")
+if kind == "uploaded":
+    rec = uploaded.get(name)
+    if not rec or not isinstance(rec.get("df"), pd.DataFrame):
+        st.error("Uploaded dataset not found in workspace. Re-upload it from Chat.")
+        st.stop()
+    df = rec["df"].copy()
+    dataset_label = f"Uploaded: {name}"
+else:
+    df = _load_default_csv(DEFAULT_DIR / name)
+    dataset_label = f"Default: {name}"
+
+# Set as active for agent/tools
+w["active_dataset"] = name
+tools.set_active_df(df, name=name)
+
+st.success(f"Using: {dataset_label} ({df.shape[0]} rows, {df.shape[1]} cols)")
+
+# Preview
+with st.expander("Preview", expanded=True):
+    st.dataframe(df.head(200), use_container_width=True)
+
+# Schema
 schema = detect_schema(df)
+with st.expander("Detected schema", expanded=False):
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("**Numeric**")
+        st.write(schema.get("numeric", []))
+    with c2:
+        st.markdown("**Categorical**")
+        st.write(schema.get("categorical", []))
+    with c3:
+        st.markdown("**Datetime**")
+        st.write(schema.get("datetime", []))
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.markdown("**Numeric**")
-    st.write(schema["numeric"])
-with col2:
-    st.markdown("**Categorical**")
-    st.write(schema["categorical"])
-with col3:
-    st.markdown("**Datetime**")
-    st.write(schema["datetime"])
-
-# ----------------------------
-# Simple filter + aggregation demo
-# ----------------------------
 st.divider()
-st.subheader("Filter + Aggregate (Demo)")
+st.subheader("Quick visualization")
 
-store = st.number_input("Store number", min_value=1, value=1)
-family = st.text_input("Family (exact match)", value="GROCERY I")
-start = st.text_input("Start date", value="2013-01-01")
-end = st.text_input("End date", value="2013-02-01")
+date_guess = _guess_date_col(df)
+metric_guess = _guess_numeric_col(df)
+group_guess = _guess_group_col(df)
 
-compare_mode = st.selectbox(
-    "Compare mode",
-    [
-        "Daily sales trend (group by date)",
-        "Compare families (group by family)",
-        "Monthly sales (group by month)",
-        "Yearly sales (group by year)",
-    ],
+cols = list(df.columns)
+
+colA, colB, colC = st.columns([1, 1, 1])
+with colA:
+    date_col = st.selectbox("Date column (optional)", options=["(none)"] + cols, index=(cols.index(date_guess) + 1) if date_guess in cols else 0, key="viz_date_col")
+with colB:
+    metric_col = st.selectbox("Metric (numeric)", options=cols, index=cols.index(metric_guess) if metric_guess in cols else 0, key="viz_metric_col")
+with colC:
+    group_col = st.selectbox("Group (optional)", options=["(none)"] + cols, index=(cols.index(group_guess) + 1) if group_guess in cols else 0, key="viz_group_col")
+
+# Save mapping for generic DATA tool choices
+tools.set_active_mapping(
+    date_col=None if date_col == "(none)" else date_col,
+    metric_col=metric_col,
+    group_col=None if group_col == "(none)" else group_col,
 )
 
-if st.button("Run filter + aggregate"):
-    with st.spinner("Filtering data..."):
-        # if comparing families/month/year, don't lock to a single family
-        family_filter = family if compare_mode == "Daily sales trend (group by date)" else None
+agg = st.selectbox("Aggregation", ["sum", "mean", "median", "max", "min"], index=0, key="viz_agg")
+chart = st.selectbox("Chart", ["line", "bar"], index=0, key="viz_chart")
 
-        df_filtered = filter_sales(
-            df,
-            store_nbr=store,
-            family=family_filter,
-            start=start,
-            end=end,
-        )
+work = df.copy()
 
-    st.write(f"Rows after filter: {len(df_filtered)}")
+# Parse/clean date column if selected
+if date_col != "(none)":
+    work[date_col] = pd.to_datetime(work[date_col], errors="coerce")
+    work = work.dropna(subset=[date_col])
 
-    if len(df_filtered) == 0:
-        st.warning("No data for this filter.")
+# If group selected
+if group_col != "(none)":
+    if agg == "sum":
+        out = work.groupby(group_col, dropna=False)[metric_col].sum().reset_index()
+    elif agg == "mean":
+        out = work.groupby(group_col, dropna=False)[metric_col].mean().reset_index()
+    elif agg == "median":
+        out = work.groupby(group_col, dropna=False)[metric_col].median().reset_index()
+    elif agg == "max":
+        out = work.groupby(group_col, dropna=False)[metric_col].max().reset_index()
     else:
-        if compare_mode == "Daily sales trend (group by date)":
-            out = group_sum_by_date(df_filtered, date_col="date", value_col="sales")
-            st.subheader("Daily Sales")
-            st.dataframe(out)
-            st.line_chart(out.set_index("date")["sales"])
+        out = work.groupby(group_col, dropna=False)[metric_col].min().reset_index()
 
-        elif compare_mode == "Compare families (group by family)":
-            out = group_sum(df_filtered, group_col="family", value_col="sales")
-            st.subheader("Sales by Family (comparison)")
-            st.dataframe(out.head(50))
-            st.bar_chart(out.set_index("family")["sales"].head(20))
+    out = out.sort_values(metric_col, ascending=False)
 
-        elif compare_mode == "Monthly sales (group by month)":
-            out = group_sum_by_month(df_filtered, date_col="date", value_col="sales")
-            st.subheader("Monthly Sales")
-            st.dataframe(out)
-            st.bar_chart(out.set_index("month")["sales"])
+    st.write("Result table")
+    st.dataframe(out.head(200), use_container_width=True)
 
-        else:  # yearly
-            out = group_sum_by_year(df_filtered, date_col="date", value_col="sales")
-            st.subheader("Yearly Sales")
-            st.dataframe(out)
-            st.bar_chart(out.set_index("year")["sales"])
+    if chart == "bar":
+        st.bar_chart(out.set_index(group_col)[metric_col].head(50))
+    else:
+        st.line_chart(out.set_index(group_col)[metric_col].head(50))
 
-# ----------------------------
-# NL → Computation
-# ----------------------------
-st.divider()
-st.subheader("Ask a data question (NL → Computation)")
-
-nl_query = st.text_input(
-    "Examples:\n"
-    "- 'Show daily sales for store 1 family Grocery I in jan 2013'\n"
-    "- 'Top families by sales for store 1 in jan 2013'\n"
-    "- 'which month sales maximum in 2016'\n"
-    "- 'which year sales maximum'\n",
-    key="data_nl_query",
-)
-
-run_nl = st.button("Run NL query", key="run_nl_query")
-
-if run_nl:
-    if not nl_query.strip():
-        st.warning("Please type a question first.")
-        st.stop()
-
-    with st.spinner("Parsing your question..."):
-        dq = parse_data_query(nl_query)
-
-    st.markdown("### Parsed intent")
-    st.write(dq)
-
-    # Use parser mode ONLY (don’t re-detect in Streamlit)
-    mode = getattr(dq, "mode", "daily")
-    st.caption(f"Detected mode: {mode}")
-
-    # Basic validation
-    if dq.metric != "sales":
-        st.warning("Right now this supports metric='sales' only.")
-        st.stop()
-
-    try:
-        with st.spinner("Running computation..."):
-            # Only lock to a family for DAILY mode
-            family_filter = dq.family if mode == "daily" else None
-
-            df_filtered = filter_sales(
-                df,
-                store_nbr=dq.store_nbr,
-                family=family_filter,
-                start=dq.start,
-                end=dq.end,
-            )
-
-        rows = len(df_filtered)
-        st.markdown("### Result")
-        st.write(f"Rows after filter: {rows}")
-
-        if rows == 0:
-            st.warning("No rows matched your query. Try different store/family/date range.")
-            st.stop()
-
-        # ----------------------------
-        # Branch by detected mode
-        # ----------------------------
-        if mode == "monthly":
-            out = group_sum_by_month(df_filtered, date_col="date", value_col="sales")
-            total_sales = float(out["sales"].sum())
-            top_month = str(out.iloc[0]["month"])
-            top_sales = float(out.iloc[0]["sales"])
-
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Months", int(out.shape[0]))
-            c2.metric("Total sales", f"{total_sales:,.2f}")
-            c3.metric("Top month", f"{top_month} ({top_sales:,.2f})")
-
-            st.subheader("Monthly Sales (computed)")
-            st.dataframe(out)
-            st.bar_chart(out.set_index("month")["sales"])
-            st.caption("Computed from the dataset (not from documents).")
-
-        elif mode == "yearly":
-            out = group_sum_by_year(df_filtered, date_col="date", value_col="sales")
-            total_sales = float(out["sales"].sum())
-            top_year = str(out.iloc[0]["year"])
-            top_sales = float(out.iloc[0]["sales"])
-
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Years", int(out.shape[0]))
-            c2.metric("Total sales", f"{total_sales:,.2f}")
-            c3.metric("Top year", f"{top_year} ({top_sales:,.2f})")
-
-            st.subheader("Yearly Sales (computed)")
-            st.dataframe(out)
-            st.bar_chart(out.set_index("year")["sales"])
-            st.caption("Computed from the dataset (not from documents).")
-
-        elif mode == "family":
-            out = group_sum(df_filtered, group_col="family", value_col="sales")
-            total_sales = float(out["sales"].sum())
-            top_family = str(out.iloc[0]["family"])
-            top_sales = float(out.iloc[0]["sales"])
-
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Families", int(out.shape[0]))
-            c2.metric("Total sales", f"{total_sales:,.2f}")
-            c3.metric("Top family", f"{top_family} ({top_sales:,.2f})")
-
-            st.subheader("Sales by Family (computed)")
-            st.dataframe(out.head(50))
-            st.bar_chart(out.set_index("family")["sales"].head(20))
-            st.caption("Computed from the dataset (not from documents).")
-
+else:
+    # If date selected -> time series
+    if date_col != "(none)":
+        # daily-ish aggregation by date
+        if agg == "sum":
+            out = work.groupby(date_col)[metric_col].sum().reset_index()
+        elif agg == "mean":
+            out = work.groupby(date_col)[metric_col].mean().reset_index()
+        elif agg == "median":
+            out = work.groupby(date_col)[metric_col].median().reset_index()
+        elif agg == "max":
+            out = work.groupby(date_col)[metric_col].max().reset_index()
         else:
-            # daily
-            out = group_sum_by_date(df_filtered, date_col="date", value_col="sales")
-            total_sales = float(out["sales"].sum())
-            avg_sales = float(out["sales"].mean())
-            days = int(len(out))
+            out = work.groupby(date_col)[metric_col].min().reset_index()
 
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Days", days)
-            c2.metric("Total sales", f"{total_sales:,.2f}")
-            c3.metric("Avg sales/day", f"{avg_sales:,.2f}")
+        out = out.sort_values(date_col)
+        st.write("Result table")
+        st.dataframe(out.head(400), use_container_width=True)
 
-            st.subheader("Daily Sales (computed)")
-            st.dataframe(out)
-            st.line_chart(out.set_index("date")["sales"])
-            st.caption("Computed from the dataset (not from documents).")
-
-    except Exception as e:
-        st.error("Something went wrong while computing the result.")
-        st.code(str(e))
+        if chart == "bar":
+            st.bar_chart(out.set_index(date_col)[metric_col])
+        else:
+            st.line_chart(out.set_index(date_col)[metric_col])
+    else:
+        # overall scalar
+        series = work[metric_col]
+        val = getattr(series, agg)() if hasattr(series, agg) else series.sum()
+        st.metric(f"{agg}({metric_col})", f"{float(val):,.4f}")

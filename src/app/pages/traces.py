@@ -12,14 +12,11 @@ st.set_page_config(page_title="Traces", layout="wide")
 st.title("Execution Traces")
 
 
-# --------------------------
-# Helpers
-# --------------------------
 def list_trace_files() -> List[str]:
     if not os.path.exists(TRACE_DIR):
         return []
     files = [f for f in os.listdir(TRACE_DIR) if f.endswith(".json")]
-    files.sort(reverse=True)  # newest first
+    files.sort(reverse=True)
     return files
 
 
@@ -32,90 +29,24 @@ def load_trace(path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def safe_preview(text: Any, max_chars: int = 800) -> str:
+def safe_preview(text: Any, max_chars: int = 1200) -> str:
     s = "" if text is None else str(text)
     s = s.strip()
-    if len(s) <= max_chars:
-        return s
-    return s[:max_chars] + " ..."
+    return s if len(s) <= max_chars else s[:max_chars] + " ..."
 
-
-def summarize_evidence(evidence: Any) -> Dict[str, Any]:
-    """Avoid dumping huge payloads; show compact info."""
-    if not isinstance(evidence, dict):
-        return {"type": str(type(evidence)), "value": safe_preview(evidence, 300)}
-
-    out: Dict[str, Any] = {"keys": list(evidence.keys())}
-    for k, v in evidence.items():
-        if isinstance(v, dict):
-            out[k] = {"keys": list(v.keys())}
-
-            # common DF holder in your tools is 'df'
-            df = v.get("df")
-            if isinstance(df, pd.DataFrame):
-                out[k]["df_shape"] = list(df.shape)
-                out[k]["df_columns"] = list(df.columns)[:25]
-            else:
-                if df is not None and not isinstance(df, (str, int, float, bool, list, dict)):
-                    out[k]["df_type"] = str(type(df))
-        else:
-            out[k] = {"type": str(type(v)), "preview": safe_preview(v, 200)}
-    return out
-
-
-# --------------------------
-# UI
-# --------------------------
-if st.button("Refresh traces", key="traces_refresh_btn"):
-    st.rerun()
 
 files = list_trace_files()
-
 if not files:
-    st.info("No traces found yet. Ask a question in the Chat page to generate trace files.")
+    st.info("No traces found yet. Ask a question in the Chat page to generate traces.")
     st.stop()
 
-# Deep-link target from Chat (set in session_state)
-deep_link_trace = st.session_state.get("trace_selected")
-
-query = st.text_input(
-    "Filter by filename (optional)",
-    value="",
-    key="trace_filter",
-)
-
-filtered_files = [f for f in files if query.lower() in f.lower()] if query else files
-
-if not filtered_files:
-    st.warning("No trace files match your filter.")
-    st.stop()
-
-# If deep-link file exists, prefer it (even if filter is applied)
-default_index = 0
-if deep_link_trace:
-    if deep_link_trace in filtered_files:
-        default_index = filtered_files.index(deep_link_trace)
-    elif deep_link_trace in files and (not query):
-        default_index = files.index(deep_link_trace)
-        filtered_files = files  # widen list so selection works
-
-selected = st.selectbox(
-    "Select a trace file",
-    filtered_files,
-    index=default_index,
-    key="trace_select",
-)
-
+selected = st.selectbox("Select a trace file", files, index=0, key="traces_select")
 path = os.path.join(TRACE_DIR, selected)
 
 trace = load_trace(path)
 if trace is None:
     st.stop()
 
-# Optional: clear after use so it doesn't "stick" forever
-st.session_state.pop("trace_selected", None)
-
-# Basic fields
 question = trace.get("question", "")
 route = trace.get("route", "")
 mode = trace.get("mode", "")
@@ -125,52 +56,36 @@ trace_rows = trace.get("trace", []) or []
 evidence = trace.get("evidence", {}) or {}
 
 col1, col2 = st.columns([2, 1])
-
 with col1:
     st.subheader("Summary")
     st.write("**Question:**", question)
     st.write("**Route:**", route)
     st.write("**Mode:**", mode)
-
     st.write("**Answer preview:**")
-    st.code(safe_preview(answer, 1200), language="text")
+    st.code(safe_preview(answer), language="text")
 
 with col2:
     st.subheader("File")
     st.code(path)
 
-    st.write("**Trace timestamp (from filename):**")
-    st.caption(selected.replace("trace-", "").replace(".json", ""))
-
 st.divider()
-
-# Node timings
 st.subheader("Node timings")
+
 rows = []
 for t in trace_rows:
     if isinstance(t, dict):
-        rows.append(
-            {
-                "node": t.get("node", ""),
-                "ms": t.get("ms", None),
-                "route": t.get("route", None),
-            }
-        )
+        rows.append({"node": t.get("node", ""), "ms": t.get("ms", None), "route": t.get("route", None)})
 
 if rows:
-    df = pd.DataFrame(rows)
-    df = df[[c for c in df.columns if df[c].notna().any()]]
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True)
 else:
     st.info("No node timing rows found.")
-
-st.divider()
 
 with st.expander("Router metadata", expanded=False):
     st.json(router_meta)
 
-with st.expander("Evidence summary", expanded=False):
-    st.json(summarize_evidence(evidence))
+with st.expander("Evidence (raw)", expanded=False):
+    st.json(evidence)
 
 with st.expander("Raw trace JSON", expanded=False):
     st.json(trace)
