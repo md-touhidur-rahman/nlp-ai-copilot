@@ -1,192 +1,190 @@
-NLP AI Copilot
+# NLP AI Copilot  
+**Evidence-Grounded RAG, Data Reasoning, and Agent Workflows**
 
-A grounded AI system for document retrieval and data reasoning
+An AI Copilot built in **Python 3.9** using **Streamlit** that answers questions about **documents and datasets** in a strictly grounded way.
 
-Overview
+The system either:
+- **answers with explicit evidence** (citations or computed values), or  
+- **refuses** when the required evidence does not exist.
 
-This project implements a unified AI copilot that answers user questions by deterministically routing them to one of two grounded pipelines:
+This project is designed to demonstrate how large language models can act as **interfaces to reliable systems**, not as free-form guessers.
 
-Document reasoning (RAG) using retrieval over indexed PDFs
+---
 
-Data reasoning using real computation over structured tabular data
+## Core Capabilities
 
-The system is explicitly designed to avoid hallucinations:
+### 1. Document Question Answering (RAG)
+- Ingests PDF / text documents
+- Chunks content with metadata
+- Embeds and indexes chunks (FAISS)
+- Retrieves relevant evidence for a query
+- Generates answers **only from retrieved chunks**
+- Refuses to answer when evidence is missing
+- UI displays retrieved chunks as an evidence panel
 
-Document answers must reference retrieved evidence
+### 2. Data Reasoning (Language → Computation)
+- Loads a default CSV dataset or **any user-uploaded CSV**
+- Detects schema and numeric columns automatically
+- Parses natural-language questions into structured queries
+- Executes **real pandas computations** (not LLM guessing)
+- Produces tables and plots grounded in computed results
 
-Data answers must be derived from actual computations and visualizations
+### 3. Unified Router
+- Single chat interface for both documents and data
+- Rule-based routing (DATA vs RAG)
+- Manual override available in the UI for debugging and demos
 
-The focus of this project is system design, grounding, and debuggability, not conversational fluency.
+### 4. Agent Workflows (LangGraph)
+- Central agent entrypoint orchestrates execution
+- Deterministic control flow
+- State captures:
+  - route decision
+  - tool execution
+  - evidence
+  - answer
+- Designed to be inspectable and extensible
 
-Key Capabilities
+### 5. Observability via Traces
+- Every execution produces a JSON trace
+- Stored under `data/traces/`
+- Streamlit Trace Viewer page lets you inspect:
+  - question
+  - route and mode
+  - node timings
+  - router metadata
+  - evidence summary
 
-Single unified chat interface
-
-Deterministic, explainable routing (rule-based)
-
-Retrieval-augmented generation with evidence inspection
-
-Real data analytics (filtering, aggregation, plotting)
-
-Explicit grounding contracts per execution path
-
-Routing override for debugging and demonstration
-
-Clear extension path toward agent graphs and tracing
+---
 
 
-Architecture:
+## Grounding Policy
 
-User Question
-      |
-      v
-Rule-Based Router
-      |
-      +---------------------------+
-      |                           |
-      v                           v
-Data Pipeline                RAG Pipeline
-- Parse query                - Embed + retrieve
-- Filter dataset             - Top-k FAISS search
-- Aggregate metrics           - Local LLM (Ollama)
-- Generate plots              - Evidence-based answer
-      |                           |
-      +-------------+-------------+
-                    |
-              Final Answer
-           (with evidence)
+This project enforces a strict grounding contract:
 
-Project Structure:
-nlp-ai-copilot/
-├── src/
-│   ├── agent/
-│   │   ├── router.py          # Rule-based routing logic
-│   │   └── rag_answerer.py    # RAG execution
-│   ├── data/
-│   │   ├── loader.py
-│   │   ├── filtering.py
-│   │   ├── aggregate.py
-│   │   └── nl_parser.py
-│   ├── app/
-│   │   └── pages/
-│   │       └── chat.py        # Unified chat UI
-│
-├── data/                      # Local only (ignored by git)
-│   └── .gitkeep
-├── tests/
-│   └── test_router.py
-├── README.md
-└── .gitignore
+- **RAG mode**
+  - Answers must cite retrieved document chunks
+  - If no sufficient evidence is found, the system refuses
 
-Running the Application
-1. Environment setup
+- **DATA mode**
+  - Answers must reference computed values
+  - Tables and plots are generated from real data
+  - No speculative or fabricated numbers
 
-git clone https://github.com/md-touhidur-rahman/nlp-ai-copilot.git
-cd nlp-ai-copilot
+If the system cannot justify an answer with evidence, it will say **“I don’t know.”**
+
+---
+
+## Project Structure (Key Parts)
+
+src/
+agent/
+router.py # rule-based routing
+tools.py # data + RAG execution tools
+graph.py # agent orchestration & tracing
+app/
+streamlit_app.py # Streamlit entrypoint
+pages/
+chat.py # unified chat UI
+data.py # dataset exploration
+traces.py # trace viewer
+data/
+loader/, filter/, aggregate/, nl_parser.py
+
+Copy code
+data/
+datasets/tabular/ # default CSV datasets (not committed)
+traces/ # execution traces (not committed)
+
+yaml
+Copy code
+
+---
+
+## Setup Instructions
+
+### 1. Environment
+```bash
+cd ~/Projects/nlp-ai-copilot
 python3.9 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+2. Run the App
+Always run from the project root:
 
-2. Local dependencies
-
-Python 3.9
-
-Streamlit
-
-Ollama running locally
-
-Dataset placed at: data/datasets/tabular/store_sales_train.csv
-
-3. Launch
+bash
+Copy code
 PYTHONPATH=. streamlit run src/app/streamlit_app.py
+Default Dataset
+The project expects a default dataset at:
+
+bash
+Copy code
+data/datasets/tabular/store_sales_train.csv
+You can alternatively upload any CSV via the sidebar, and DATA queries will operate on the uploaded file instead.
 
 Example Queries
-Data reasoning (computed)
+Data Questions (Store Sales)
+Show daily sales for store 1 family Grocery I in jan 2013
 
-Which month sales maximum in 2016
+Sales in march to june in 2013
 
-Sales from January to April in 2013
+Which month had maximum sales in 2016
 
 Compare sales by family in 2014
 
-Show daily sales for store 1 in Jan 2013
+Data Questions (Uploaded CSV)
+max Log2_FC by Gene
 
-These queries result in:
+average Adj_P_Value
 
-Parsed structured query
+top 10 rows by P_Value
 
-Aggregated table
+Document Questions (RAG)
+According to the document, what does X mean?
 
-Time-series or categorical plot
+What does the PDF say about Y? Cite sources.
 
-Explicit numerical results (e.g., peak month)
+Evaluation
+Unit and regression tests:
 
-Document reasoning (RAG)
+bash
+Copy code
+PYTHONPATH=. pytest -q
+Optional evaluation script:
 
-According to the document, what is Industry 4.0?
-
-Cite evidence about automation from the PDF
-
-What does the report say about supply chain risks?
-
-These queries result in:
-
-Generated answer
-
-Retrieved document chunks
-
-Similarity scores
-
-Explicit refusal if evidence is insufficient
-
-Grounding Policy
-
-The system enforces different grounding guarantees depending on execution mode:
-
-Mode	        Guarantee
-DATA	        Results are produced only via real computation
-RAG	            Answers must reference retrieved document chunks
-GENERAL	        Used only when routing confidence is low
-MIXED	        Reserved for future phases
-
-At no point does the system infer facts without evidence or computation.
-
+bash
+Copy code
+PYTHONPATH=. python eval/run_eval.py
 Known Limitations
+Mixed reasoning (docs + data in one answer) is scaffolded but not executed end-to-end
 
-Routing is rule-based (no learned routing yet)
+The router detects MIXED queries and the UI explains the limitation clearly
 
-RAG operates on local documents only
+Uploaded CSV handling is heuristic
 
-Data metrics currently focus on sales-related measures
+For unusual schemas, more explicit queries are required
 
-No persistent trace or execution viewer yet
+These are deliberate design choices prioritizing determinism and transparency.
 
-No automated evaluation harness yet
+Roadmap
+Mixed reasoning workflow (retrieve document facts → compute data window → compare)
 
-These limitations are intentional and addressed in the roadmap.
+Evaluation results UI in Streamlit
 
+Chat → Trace deep-linking
 
+More advanced schema selection for arbitrary datasets
 
+Design Philosophy
+This project focuses on one principle:
 
+LLMs should interface with reliable systems, not replace them.
 
+Every answer must be supported by either:
 
+retrieved document evidence, or
 
+computed data results.
 
-
-
-
-Design Rationale
-
-This project prioritizes:
-
-Determinism over cleverness
-
-Explainability over opacity
-
-Grounded outputs over fluent text
-
-System boundaries over monolithic prompting
-
-It is intended as a foundation for production-grade AI tooling rather than a conversational demo.
-
-License : MIT
+License
+MIT

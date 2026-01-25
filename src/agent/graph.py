@@ -1,246 +1,110 @@
 # src/agent/graph.py
+import json
+import os
 import time
-from typing import Any, Dict
+from dataclasses import dataclass, asdict
+from typing import Any, Dict, List, Optional
 
-from src.agent.state import AgentState, TraceEvent
-from src.agent.router import Route
+from src.agent.router import RuleBasedRouter, Route
 from src.agent import tools
-from src.agent.tracing import save_trace
+
+TRACES_DIR = os.path.join("data", "traces")
+_ROUTER = RuleBasedRouter()
 
 
-try:
-    from langgraph.graph import StateGraph, END
-except Exception as e:
-    StateGraph = None
-    END = None
+@dataclass
+class AgentState:
+    question: str
+    mode: str = "general"
+    route: Optional[str] = None
+    answer: str = ""
+    evidence: Dict[str, Any] = None
+    router_meta: Dict[str, Any] = None
+    trace: List[Dict[str, Any]] = None
 
 
-def _add_trace(state: AgentState, node: str, t0: float, inp: Dict[str, Any], out: Dict[str, Any]) -> None:
-    ms = (time.perf_counter() - t0) * 1000.0
-    state.trace.append(
-        TraceEvent(
-            node=node,
-            ms=ms,
-            input_summary=inp,
-            output_summary=out,
-        )
-    )
+def _ensure_traces_dir() -> None:
+    os.makedirs(TRACES_DIR, exist_ok=True)
 
 
-def node_router(state: AgentState) -> AgentState:
-    t0 = time.perf_counter()
-    meta = tools.route_question(state.question)
-    state.route = meta["route"]
-    state.router_meta = meta
-    _add_trace(
-        state,
-        "router",
-        t0,
-        {"question": state.question},
-        {"route": state.route, "scores": meta.get("router_scores", {})},
-    )
-    return state
+def _trace_path() -> str:
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    ms = int(time.time() * 1000)
+    return os.path.join(TRACES_DIR, f"trace-{ts}-{ms}.json")
 
 
-def node_data(state: AgentState) -> AgentState:
-    t0 = time.perf_counter()
-    out = tools.run_data(state.question)
-    state.data = out
-    _add_trace(
-        state,
-        "data_tool",
-        t0,
-        {"question": state.question},
-        {"ok": "error" not in out, "keys": list(out.keys())},
-    )
-    return state
+def _save_trace(payload: Dict[str, Any]) -> str:
+    _ensure_traces_dir()
+    path = _trace_path()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+    return path
 
 
-def node_rag(state: AgentState) -> AgentState:
-    t0 = time.perf_counter()
-    out = tools.run_rag(state.question)
-    state.rag = out
-    _add_trace(
-        state,
-        "rag_tool",
-        t0,
-        {"question": state.question},
-        {"ok": "error" not in out, "chunks": len(out.get("chunks", []))},
-    )
-    return state
-
-
-def node_verify(state: AgentState) -> AgentState:
-    t0 = time.perf_counter()
-
-    # deterministic verification rules (no LLM)
-    if state.route == Route.DATA.value:
-        if "error" in state.data:
-            state.mode = "data"
-            state.answer = f"Data pipeline error: {state.data['error']}"
-            state.evidence = {"data": {"error": state.data["error"]}}
-        else:
-            df = state.data.get("df")
-            if df is None or getattr(df, "empty", True):
-                state.mode = "data"
-                state.answer = "No rows matched your filters for that time range."
-                state.evidence = {"data": {"dq": state.data.get("dq", {}), "empty": True}}
-    elif state.route == Route.RAG.value:
-        if "error" in state.rag:
-            state.mode = "rag"
-            state.answer = state.rag["error"]
-            state.evidence = {"rag": {"error": state.rag["error"]}}
-        else:
-            chunks = state.rag.get("chunks", [])
-            if not chunks:
-                state.mode = "rag"
-                state.answer = "I can’t answer from the documents because no relevant evidence was retrieved."
-                state.evidence = {"rag": {"chunks": []}}
-    else:
-        # for GENERAL/MIXED we don’t do more in Phase 5 minimal
-        pass
-
-    _add_trace(state, "verify", t0, {"route": state.route}, {"mode": state.mode, "has_answer": bool(state.answer)})
-    return state
-
-
-def node_finalize(state: AgentState) -> AgentState:
-    t0 = time.perf_counter()
-
-    # If verify already set an answer, keep it.
-    if state.answer:
-        _add_trace(state, "finalize", t0, {"route": state.route}, {"mode": state.mode})
-        return state
-
-    if state.route == Route.DATA.value:
-        state.mode = "data"
-        state.answer = "Computed result from dataset."
-        state.evidence = {"data": {"dq": state.data.get("dq", {}), "df": state.data.get("df")}}
-    elif state.route == Route.RAG.value:
-        state.mode = "rag"
-        state.answer = state.rag.get("answer", "")
-        state.evidence = {"rag": {"top_score": state.rag.get("top_score"), "chunks": state.rag.get("chunks", [])}}
-    elif state.route == Route.MIXED.value:
-        state.mode = "mixed"
-        state.answer = "MIXED routing detected. Phase 5 minimal graph does not execute mixed tools yet."
-        state.evidence = {"router": state.router_meta}
-    else:
-        state.mode = "general"
-        state.answer = "I can’t confidently route this to DATA or RAG. Use the override to force a mode."
-        state.evidence = {"router": state.router_meta}
-
-    _add_trace(state, "finalize", t0, {"route": state.route}, {"mode": state.mode})
-    return state
-
-
-def build_graph():
-    if StateGraph is None:
-        raise RuntimeError("langgraph is not installed. Run: pip install langgraph")
-
-    g = StateGraph(AgentState)
-
-    g.add_node("router", node_router)
-    g.add_node("data_tool", node_data)
-    g.add_node("rag_tool", node_rag)
-    g.add_node("verify", node_verify)
-    g.add_node("finalize", node_finalize)
-
-    g.set_entry_point("router")
-
-    # route -> tool
-    def _route_selector(state: AgentState) -> str:
-        if state.route == Route.DATA.value:
-            return "data_tool"
-        if state.route == Route.RAG.value:
-            return "rag_tool"
-        # mixed/general go straight to verify/finalize
-        return "verify"
-
-    g.add_conditional_edges("router", _route_selector, {
-        "data_tool": "data_tool",
-        "rag_tool": "rag_tool",
-        "verify": "verify",
-    })
-
-    g.add_edge("data_tool", "verify")
-    g.add_edge("rag_tool", "verify")
-    g.add_edge("verify", "finalize")
-    g.add_edge("finalize", END)
-
-    return g.compile()
-
-
-# cached compiled graph in-process
-_GRAPH = None
-
-
-def run_agent(question: str) -> AgentState:
-    """
-    Phase 5/6 contract:
-    - Always returns AgentState (dataclass)
-    - Works even if LangGraph invoke() returns dict
-    - Saves a lightweight trace JSON to data/traces/
-    """
-    global _GRAPH
-    if _GRAPH is None:
-        _GRAPH = build_graph()
-
-    # Start with a dataclass state
-    init_state = AgentState(question=question)
-
-    # LangGraph may return dict OR AgentState depending on compilation/state handling
-    raw_out = _GRAPH.invoke(init_state)
-
-    # ---- Normalize output to AgentState ----
-    if isinstance(raw_out, dict):
-        out_state = AgentState(question=raw_out.get("question", question))
-        # copy known fields safely
-        out_state.route = raw_out.get("route")
-        out_state.mode = raw_out.get("mode", "general")
-        out_state.answer = raw_out.get("answer", "")
-        out_state.router_meta = raw_out.get("router_meta", {}) or {}
-        out_state.evidence = raw_out.get("evidence", {}) or {}
-        out_state.trace = raw_out.get("trace", []) or []
-    else:
-        out_state = raw_out  # already AgentState
-
-    # ---- Save trace (Phase 6) ----
-    payload = {
-        "question": out_state.question,
-        "route": out_state.route,
-        "mode": out_state.mode,
-        "answer_preview": (out_state.answer or "")[:300],
-        "router_meta": out_state.router_meta,
-        "trace": [
-            t if isinstance(t, dict) else getattr(t, "__dict__", {"node": str(t), "ms": None})
-            for t in (out_state.trace or [])
-        ],
+def _route(question: str) -> Dict[str, Any]:
+    rr = _ROUTER.route(question)
+    return {
+        "route": rr.route.value,
+        "router_explanation": _ROUTER.explain_route(rr),
+        "router_scores": {k.value: v for k, v in rr.scores.items()},
+        "router_matched": {
+            Route.DATA.value: rr.matched.get(Route.DATA, []),
+            Route.RAG.value: rr.matched.get(Route.RAG, []),
+        },
     }
 
-    # Evidence summary only (no big tables)
-    try:
-        if out_state.mode == "data":
-            dq = (out_state.evidence or {}).get("data", {}).get("dq", {})
-            df = (out_state.evidence or {}).get("data", {}).get("df", None)
-            payload["evidence"] = {
-                "data": {
-                    "dq": dq,
-                    "df_shape": getattr(df, "shape", None),
-                    "df_columns": list(getattr(df, "columns", [])) if df is not None else [],
-                }
-            }
-        elif out_state.mode == "rag":
-            chunks = (out_state.evidence or {}).get("rag", {}).get("chunks", []) or []
-            payload["evidence"] = {"rag": {"chunks_count": len(chunks)}}
-    except Exception:
-        pass
 
-    from src.agent.tracing import save_trace
-    trace_path = save_trace(payload)
+def run_agent(question: str, override: bool = False, forced_route: Optional[str] = None) -> Dict[str, Any]:
+    q = question.strip() if isinstance(question, str) else ""
 
-    # attach trace path for UI
-    if out_state.router_meta is None:
-        out_state.router_meta = {}
-    out_state.router_meta["trace_path"] = trace_path
+    state = AgentState(question=q, evidence={}, router_meta={}, trace=[])
 
-    return out_state
+    router_meta = _route(q)
+    route = router_meta["route"]
+
+    if override and forced_route:
+        route = forced_route
+        router_meta["router_explanation"] = f"Forced route: {forced_route}"
+
+    state.route = route
+    state.router_meta = router_meta
+    state.trace.append({"node": "route", "route": route})
+
+    if route == Route.DATA.value:
+        out = tools.run_data(q)
+        state.mode = "data"
+        if out.get("error"):
+            state.answer = f"Data pipeline error: {out['error']}"
+            if out.get("hint"):
+                state.answer += f"\n\n{out['hint']}"
+        else:
+            state.answer = out.get("summary", "Computed result from dataset.")
+        state.evidence = {"data": out}
+
+    elif route == Route.RAG.value:
+        out = tools.run_rag(q)
+        state.mode = "rag"
+        state.answer = out.get("answer", out.get("error", ""))
+        state.evidence = {"rag": out}
+
+    elif route == Route.MIXED.value:
+        state.mode = "mixed"
+        state.answer = (
+            "MIXED routing detected.\n\n"
+            "This version executes one tool path at a time.\n"
+            "Use Override routing to force DATA or RAG."
+        )
+        state.evidence = {"mixed": {"note": "Not implemented"}}
+
+    else:
+        state.mode = "general"
+        state.answer = (
+            "I can’t confidently route this to DATA or RAG.\n\n"
+            "Add DATA terms (sales, plot, average) or RAG terms (pdf, cite) or use Override."
+        )
+        state.evidence = {}
+
+    payload = asdict(state)
+    trace_path = _save_trace(payload)
+    payload["router_meta"]["trace_path"] = trace_path
+    return payload
