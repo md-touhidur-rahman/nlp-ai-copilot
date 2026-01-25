@@ -22,3 +22,4 @@ data/processed/
 *.csv
 *.jsonl
 *.pdf
+data/traces/

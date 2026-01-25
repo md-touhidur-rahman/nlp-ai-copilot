@@ -21,7 +21,7 @@ def detect_schema(df: pd.DataFrame) -> dict:
         elif pd.api.types.is_object_dtype(dtype):
             # try datetime parse
             try:
-                parsed = pd.to_datetime(df[col], errors="raise")
+                parsed = pd.to_datetime(df[col], format="%Y-%m-%d", errors="coerce")
                 df[col] = parsed
                 schema["datetime"].append(col)
             except Exception:
