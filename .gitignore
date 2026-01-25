@@ -11,3 +11,14 @@ venv/
 
 # Streamlit
 .streamlit/
+
+# Project data (keep structure, ignore contents)
+data/*
+!data/.gitkeep
+
+# Large / generated artifacts
+data/index/
+data/processed/
+*.csv
+*.jsonl
+*.pdf
